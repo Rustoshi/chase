@@ -8,7 +8,7 @@ import {
   Shield, Lock, Send, Globe, Copy, Check, Banknote,
   MoreHorizontal, Building, CreditCard, DollarSign,
   ShieldCheck, FileCheck, Printer, Download, Clock,
-  Bookmark, UserPlus,
+  Bookmark, UserPlus, ShieldAlert,
 } from "lucide-react"
 import { UserHeader } from "@/components/user/UserHeader"
 import { useThemeColors } from "@/components/shared/ThemeProvider"
@@ -138,6 +138,8 @@ function TransferPageContent() {
   const [pin, setPin]                       = useState("")
   const [submitting, setSubmitting]         = useState(false)
   const [error, setError]                   = useState("")
+  // Compliance (money-laundering) flag — blocks the whole flow up-front.
+  const [amlBlock, setAmlBlock]             = useState<{ flagged: boolean; reason: string }>({ flagged: false, reason: "" })
   const [txResult, setTxResult]             = useState<{
     reference: string; amount: number; currency: string; recipientName: string; timestamp?: string; fee?: number; total?: number
   } | null>(null)
@@ -176,6 +178,15 @@ function TransferPageContent() {
         if (res.ok) {
           const data = await res.json()
           setAccounts(data.accounts || [])
+        }
+      } catch { /* */ }
+      // Check the compliance flag so we can block the flow before the user
+      // fills anything in (the server enforces this too).
+      try {
+        const pr = await fetch("/api/user/profile")
+        if (pr.ok) {
+          const p = await pr.json()
+          if (p.amlFlagged) setAmlBlock({ flagged: true, reason: p.amlFlagReason || "" })
         }
       } catch { /* */ }
       setLoading(false)
@@ -661,6 +672,61 @@ function TransferPageContent() {
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  // ── Compliance block ──────────────────────────────────────────────────────
+  // A money-laundering flag stops the transfer flow entirely, up-front.
+  if (amlBlock.flagged) {
+    return (
+      <>
+        <div ref={pageTopRef} />
+        <UserHeader title="Send Money" showBack />
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px 120px" }}>
+          <div style={{
+            display: "flex", gap: 12, alignItems: "flex-start",
+            background: colors.redBg, border: `1px solid ${colors.red}33`,
+            borderRadius: 16, padding: "16px 18px",
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              background: colors.red, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <ShieldAlert style={{ width: 20, height: 20, color: "#fff" }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: colors.red, margin: "2px 0 6px" }}>
+                Account flagged for money laundering
+              </p>
+              <p style={{ fontSize: 13.5, lineHeight: 1.6, color: colors.textSecondary, margin: 0 }}>
+                {amlBlock.reason?.trim() ||
+                  "Your account is under compliance review. Transfers are temporarily unavailable. Please contact support."}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => router.push("/app/support")}
+            style={{
+              width: "100%", height: 48, marginTop: 16, borderRadius: 14, border: "none", cursor: "pointer",
+              background: colors.blue, color: "#fff", fontSize: 15, fontWeight: 600,
+            }}
+          >
+            Contact support
+          </button>
+          <button
+            onClick={() => router.push("/app/dashboard")}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              width: "100%", height: 44, marginTop: 10, borderRadius: 14, cursor: "pointer",
+              background: "transparent", border: `1px solid ${colors.border}`,
+              color: colors.textSecondary, fontSize: 14, fontWeight: 600,
+            }}
+          >
+            <ArrowLeft style={{ width: 16, height: 16 }} /> Back to dashboard
+          </button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>

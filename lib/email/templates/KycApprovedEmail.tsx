@@ -2,15 +2,13 @@ import { BANK_NAME, SUPPORT_EMAIL } from "@/lib/brand"
 
 export interface KycApprovedEmailProps {
   firstName: string
-  tier?:     number
 }
 
-export function renderKycApprovedEmail({ firstName, tier }: KycApprovedEmailProps): string {
+export function renderKycApprovedEmail({ firstName }: KycApprovedEmailProps): string {
   const appUrl = (process.env.NEXTAUTH_URL || "http://localhost:3000") + "/app/dashboard"
   const year = new Date().getFullYear()
-  const tierLine = tier
-    ? `Your account is now verified at <strong>Tier ${tier}</strong>.`
-    : `Your account is now fully verified.`
+  // Verification no longer implies a tier — the loyalty/access tier is admin-set.
+  const tierLine = `Your account is now fully verified.`
 
   return `<!DOCTYPE html>
 <html lang="en">

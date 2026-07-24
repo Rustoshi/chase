@@ -7,6 +7,7 @@ import User          from "@/lib/models/User"
 import Account       from "@/lib/models/Account"
 import Transaction   from "@/lib/models/Transaction"
 import AppSettings, { APP_SETTINGS_ID } from "@/lib/models/AppSettings"
+import { assertNotAmlFlagged } from "@/lib/services/alert.service"
 
 const swapSchema = z.object({
   direction: z.enum(["buy", "sell"]), // buy BTC with fiat, or sell BTC for fiat
@@ -43,6 +44,16 @@ export async function POST(req: NextRequest) {
 
     const { direction, amount, btcRate, pin } = parsed.data
     const userId = new mongoose.Types.ObjectId(session.user.id)
+
+    // Compliance gate — a money-laundering flag blocks all swaps.
+    try {
+      await assertNotAmlFlagged(session.user.id)
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Transactions are unavailable" },
+        { status: 403 }
+      )
+    }
 
     // Verify PIN
     const user = await User.findById(userId).select("transferPin isSuspended").lean() as Record<string, unknown> | null

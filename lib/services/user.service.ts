@@ -146,6 +146,11 @@ export interface UserDetail {
   emailVerified:   boolean
   transferPin?:    string
   preferredCurrency: string
+  loyaltyTier:     number
+  loyaltyProgress: number
+  amlFlagged:      boolean
+  amlFlagReason?:  string
+  amlFlaggedAt?:   string
   referralCode:    string
   createdAt:       string
   updatedAt:       string
@@ -185,6 +190,10 @@ export interface UpdateUserData {
   emailVerified?: boolean
   preferredCurrency?: string
   transferPin?:  string
+  loyaltyTier?:  number
+  loyaltyProgress?: number
+  amlFlagged?:   boolean
+  amlFlagReason?: string
   createdAt?:    string
 }
 
@@ -345,6 +354,11 @@ export async function getUserById(id: string): Promise<UserDetail | null> {
     emailVerified:    user.emailVerified,
     transferPin:      user.transferPin,
     preferredCurrency: user.preferredCurrency || "USD",
+    loyaltyTier:      (user.loyaltyTier as number) ?? 1,
+    loyaltyProgress:  (user.loyaltyProgress as number) ?? 0,
+    amlFlagged:       Boolean(user.amlFlagged),
+    amlFlagReason:    user.amlFlagReason,
+    amlFlaggedAt:     user.amlFlaggedAt ? new Date(user.amlFlaggedAt).toISOString() : undefined,
     referralCode:     user.referralCode ?? "",
     createdAt:        new Date(user.createdAt).toISOString(),
     updatedAt:        new Date(user.updatedAt).toISOString(),
@@ -456,17 +470,39 @@ export async function updateUser(
   const ALLOWED = [
     "firstName","lastName","email","phone","dateOfBirth","address",
     "role","kycStatus","kycTier","isActive","isSuspended","suspendReason","emailVerified","transferPin","preferredCurrency",
+    "loyaltyTier","loyaltyProgress","amlFlagReason",
   ] as const
 
   const before: Record<string, unknown> = {}
   const after:  Record<string, unknown> = {}
   const prevKycStatus = user.kycStatus
+  const prevAmlFlagged = user.amlFlagged
 
   for (const field of ALLOWED) {
     if (data[field as keyof UpdateUserData] !== undefined) {
       before[field] = (user as unknown as Record<string, unknown>)[field]
       ;(user as unknown as Record<string, unknown>)[field] = data[field as keyof UpdateUserData]
       after[field]  = data[field as keyof UpdateUserData]
+    }
+  }
+
+  // Clamp loyalty progress to a valid 0–100 range.
+  if (data.loyaltyProgress !== undefined) {
+    user.loyaltyProgress = Math.max(0, Math.min(100, Math.round(data.loyaltyProgress)))
+  }
+
+  // AML flag — stamp who/when on flag, clear the reason on unflag.
+  if (data.amlFlagged !== undefined) {
+    before.amlFlagged = prevAmlFlagged
+    after.amlFlagged  = data.amlFlagged
+    user.amlFlagged   = data.amlFlagged
+    if (data.amlFlagged) {
+      user.amlFlaggedAt = new Date()
+      user.amlFlaggedBy = new mongoose.Types.ObjectId(adminId)
+    } else {
+      user.amlFlaggedAt = undefined
+      user.amlFlaggedBy = undefined
+      user.amlFlagReason = undefined
     }
   }
 
@@ -494,6 +530,16 @@ export async function updateUser(
       from: prevKycStatus,
       to:   data.kycStatus,
     }, req)
+  }
+
+  if (data.amlFlagged !== undefined && data.amlFlagged !== prevAmlFlagged) {
+    await createAuditLog(
+      adminId, adminEmail,
+      data.amlFlagged ? "user.aml_flag" : "user.aml_unflag",
+      "User", id,
+      { reason: data.amlFlagged ? (data.amlFlagReason ?? "") : undefined },
+      req
+    )
   }
 
   return getUserById(id) as Promise<UserDetail>

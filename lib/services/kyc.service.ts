@@ -389,24 +389,25 @@ export async function approveKycDocument(
 
   console.log("[KYC Approve] User:", userIdStr, "Approved docs:", approved, "hasId:", hasId, "hasSelfie:", hasSelfie, "hasAddress:", hasAddress)
 
+  // Approving the required documents verifies the account, but it must NOT
+  // change the loyalty/access tier — the tier is set by an admin only.
   if (hasId && hasSelfie) {
     if (user.kycStatus !== "verified") {
       user.kycStatus = "verified"
       userKycStatusUpdated = true
+      await user.save()
     }
-    user.kycTier = hasAddress ? 3 : 2
-    await user.save()
-    console.log("[KYC Approve] User status updated to verified, tier:", user.kycTier)
+    console.log("[KYC Approve] User verified (tier left unchanged at", user.kycTier, ")")
   }
 
-  await createAuditLog(adminId, adminEmail, "kyc.document_approve", "KycDocument", documentId, { 
-    docType: doc.docType, 
+  await createAuditLog(adminId, adminEmail, "kyc.document_approve", "KycDocument", documentId, {
+    docType: doc.docType,
     userId: String(doc.userId),
     profileUpdated: userProfileUpdated,
   }, req)
 
   if (userKycStatusUpdated) {
-    await createAuditLog(adminId, adminEmail, "kyc.user_verified", "User", String(doc.userId), { kycTier: user.kycTier }, req)
+    await createAuditLog(adminId, adminEmail, "kyc.user_verified", "User", String(doc.userId), {}, req)
   }
 
   const docType = doc.docType as string
@@ -416,7 +417,7 @@ export async function approveKycDocument(
     await notifyUser(String(doc.userId), "kyc", "Identity verified", "Your identity has been verified. You now have full access to all platform features.")
     if (user.email) {
       // Fire-and-forget approval email (never blocks the approval flow)
-      sendKycApprovedEmail(user.email, user.firstName || "there", user.kycTier).catch(() => {})
+      sendKycApprovedEmail(user.email, user.firstName || "there").catch(() => {})
     }
   }
 
@@ -596,7 +597,7 @@ export async function overrideKycStatus(
 
   // Email the client when they're manually verified
   if (kycStatus === "verified" && before.kycStatus !== "verified" && user.email) {
-    sendKycApprovedEmail(user.email, user.firstName || "there", user.kycTier).catch(() => {})
+    sendKycApprovedEmail(user.email, user.firstName || "there").catch(() => {})
   }
   // Email the client when their verification is manually declined
   if (kycStatus === "rejected" && before.kycStatus !== "rejected" && user.email) {
@@ -696,7 +697,7 @@ export async function adminUploadAndVerifyKyc(
     "Your identity has been verified by our compliance team. You now have full access to all platform features."
   )
   if (user.email) {
-    sendKycApprovedEmail(user.email, user.firstName || "there", tier).catch(() => {})
+    sendKycApprovedEmail(user.email, user.firstName || "there").catch(() => {})
   }
 
   return { success: true, kycTier: tier }

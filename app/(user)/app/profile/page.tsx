@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   User, Mail, Shield, Key, LogOut,
   ChevronRight, CheckCircle2, AlertTriangle, Clock,
-  Eye, EyeOff, Lock, Camera, Loader2, Image as ImageIcon, X, Calendar,
+  Eye, EyeOff, Lock, Camera, Loader2, Image as ImageIcon, X, Calendar, Award,
 } from "lucide-react"
 import { UserHeader } from "@/components/user/UserHeader"
 import { CameraCaptureModal } from "@/components/user/CameraCaptureModal"
@@ -37,6 +37,11 @@ export default function ProfilePage() {
   const [liveKycStatus, setLiveKycStatus] = useState<string | null>(null)
   const [joinedDate, setJoinedDate] = useState<string | null>(null)
 
+  // Loyalty programme + compliance flag (authoritative, from the server).
+  const [loyalty, setLoyalty] = useState<{
+    tier: number; progress: number; amlFlagged: boolean; amlFlagReason: string | null
+  }>({ tier: 1, progress: 0, amlFlagged: false, amlFlagReason: null })
+
   // Profile picture
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
@@ -54,6 +59,12 @@ export default function ProfilePage() {
         if (d.kycStatus) setLiveKycStatus(d.kycStatus)
         if (d.avatarUrl) setAvatarUrl(d.avatarUrl)
         if (d.createdAt) setJoinedDate(d.createdAt)
+        setLoyalty({
+          tier:          d.loyaltyTier ?? 1,
+          progress:      Math.max(0, Math.min(100, d.loyaltyProgress ?? 0)),
+          amlFlagged:    Boolean(d.amlFlagged),
+          amlFlagReason: d.amlFlagReason ?? null,
+        })
       })
       .catch(() => { /* fall back to session value */ })
     return () => { active = false }
@@ -299,6 +310,61 @@ export default function ProfilePage() {
               : "—"}
             colors={colors}
           />
+        </div>
+
+        {/* Loyalty tier */}
+        <div className="rounded-2xl p-5" style={{ background: colors.bgElevated, border: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4" style={{ color: loyalty.amlFlagged ? colors.red : colors.blue }} />
+              <span className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>Loyalty Tier</span>
+            </div>
+            <span
+              className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={{
+                background: loyalty.amlFlagged ? colors.redBg : colors.blueBg,
+                color: loyalty.amlFlagged ? colors.red : colors.blue,
+              }}
+            >
+              Tier {loyalty.tier} of 3
+            </span>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-[12px] font-medium uppercase tracking-wide" style={{ color: colors.textTertiary }}>
+              Progress
+            </span>
+            <span
+              className="text-[13px] font-semibold"
+              style={{ color: loyalty.amlFlagged ? colors.red : colors.green }}
+            >
+              {loyalty.progress}%
+            </span>
+          </div>
+          <div
+            className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full"
+            style={{ background: loyalty.amlFlagged ? colors.redBg : colors.greenBg }}
+          >
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${loyalty.progress}%`,
+                background: loyalty.amlFlagged ? colors.red : colors.green,
+              }}
+            />
+          </div>
+
+          {loyalty.amlFlagged && (
+            <div
+              className="mt-4 flex items-start gap-2 rounded-xl px-3 py-2.5"
+              style={{ background: colors.redBg, border: `1px solid ${colors.red}33` }}
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: colors.red }} />
+              <p className="text-[13px] leading-snug" style={{ color: colors.red }}>
+                {loyalty.amlFlagReason || "Your account is under compliance review. Transfers are temporarily unavailable. Please contact support."}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

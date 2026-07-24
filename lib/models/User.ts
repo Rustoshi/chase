@@ -45,6 +45,14 @@ export interface IUser extends Document {
   referralCode: string
   referredBy?: mongoose.Types.ObjectId
   preferredCurrency: string
+  // Loyalty programme — admin-controlled tier (1–3) and progress (0–100%)
+  loyaltyTier: 1 | 2 | 3
+  loyaltyProgress: number
+  // Anti-money-laundering flag — blocks money movement and marks the profile
+  amlFlagged: boolean
+  amlFlagReason?: string
+  amlFlaggedAt?: Date
+  amlFlaggedBy?: mongoose.Types.ObjectId
   createdAt: Date
   updatedAt: Date
 }
@@ -98,6 +106,12 @@ const UserSchema = new Schema<IUser>(
     referralCode:           { type: String, unique: true, sparse: true },
     referredBy:             { type: Schema.Types.ObjectId, ref: "User" },
     preferredCurrency:      { type: String, default: "USD", uppercase: true, trim: true },
+    loyaltyTier:            { type: Number, enum: [1, 2, 3], default: 1 },
+    loyaltyProgress:        { type: Number, default: 0, min: 0, max: 100 },
+    amlFlagged:             { type: Boolean, default: false },
+    amlFlagReason:          { type: String, trim: true },
+    amlFlaggedAt:           { type: Date },
+    amlFlaggedBy:           { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 )

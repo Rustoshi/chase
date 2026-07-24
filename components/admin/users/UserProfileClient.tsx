@@ -6,7 +6,7 @@ import Link                   from "next/link"
 import { format, formatDistanceToNow } from "date-fns"
 import {
   Mail, Phone, Calendar, Copy, Check, ArrowLeft,
-  ExternalLink, AlertTriangle, ShieldCheck, ShieldAlert,
+  ExternalLink, AlertTriangle, ShieldCheck, ShieldAlert, Award,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge }              from "@/components/ui/badge"
@@ -20,6 +20,7 @@ import { TransactionModal }   from "./modals/TransactionModal"
 import { ResetPasswordModal } from "./modals/ResetPasswordModal"
 import { SuspendModal }       from "./modals/SuspendModal"
 import { UserAlertModal }     from "./modals/UserAlertModal"
+import { LoyaltyTierModal }   from "./modals/LoyaltyTierModal"
 import { AdminVerifyModal }   from "@/components/admin/kyc/modals/AdminVerifyModal"
 import { cn }                 from "@/lib/utils"
 import { formatCurrency, getCurrencySymbol } from "@/lib/utils/currency"
@@ -208,7 +209,7 @@ export function UserProfileClient({ user: initialUser }: Props) {
 
   // Modal state
   const [modal, setModal] = useState<
-    "edit" | "credit" | "debit" | "reset" | "suspend" | "verify-kyc" | "alert" | null
+    "edit" | "credit" | "debit" | "reset" | "suspend" | "verify-kyc" | "alert" | "loyalty" | null
   >(null)
   const [balanceAccountId, setBalanceAccountId] = useState<string | undefined>()
 
@@ -244,7 +245,9 @@ export function UserProfileClient({ user: initialUser }: Props) {
 
         {/* ── Section 1: Profile header ── */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start gap-4 sm:gap-6">
+          <div className="flex flex-col gap-4 sm:gap-5">
+            {/* Identity row */}
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
             <UserAvatar firstName={user.firstName} lastName={user.lastName} size="lg" avatarUrl={user.avatarUrl} />
 
             <div className="flex-1 min-w-0 w-full sm:w-auto">
@@ -291,9 +294,10 @@ export function UserProfileClient({ user: initialUser }: Props) {
                 </div>
               )}
             </div>
+            </div>
 
             {/* Action buttons */}
-            <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:self-start">
+            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
               <Button onClick={() => setModal("edit")} size="sm" className="flex-1 sm:flex-none">Edit</Button>
               {user.kycStatus !== "verified" && (
                 <Button
@@ -318,6 +322,17 @@ export function UserProfileClient({ user: initialUser }: Props) {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setModal("loyalty")}
+                className={`flex-1 sm:flex-none gap-1.5 ${user.amlFlagged
+                  ? "border-red-200 text-red-700 hover:bg-red-50"
+                  : "border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                }`}
+              >
+                <Award className="h-3.5 w-3.5" /> Loyalty
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setModal("suspend")}
                 className={`flex-1 sm:flex-none ${user.isSuspended
                   ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
@@ -336,6 +351,44 @@ export function UserProfileClient({ user: initialUser }: Props) {
           <StatCard label="Total transferred"  value={fmtFiat(user.totalTransferred)} />
           <StatCard label="Active accounts"    value={user.accounts.length} />
           <StatCard label="Open tickets"       value={openTickets} />
+        </div>
+
+        {/* ── Section 2b: Loyalty & compliance ── */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Award className={`h-4 w-4 ${user.amlFlagged ? "text-red-500" : "text-indigo-600"}`} />
+              <h2 className="text-sm font-semibold text-slate-900">Loyalty tier</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {user.amlFlagged && <Badge variant="destructive">Flagged</Badge>}
+              <button
+                onClick={() => setModal("loyalty")}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+              >
+                Adjust
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Tier {user.loyaltyTier ?? 1} of 3</span>
+            <span className={`text-xs font-semibold ${user.amlFlagged ? "text-red-600" : "text-emerald-600"}`}>
+              {user.loyaltyProgress ?? 0}%
+            </span>
+          </div>
+          <div className={`mt-1.5 h-2.5 w-full overflow-hidden rounded-full ${user.amlFlagged ? "bg-red-100" : "bg-emerald-100"}`}>
+            <div
+              className={`h-full rounded-full ${user.amlFlagged ? "bg-red-500" : "bg-emerald-500"}`}
+              style={{ width: `${Math.max(0, Math.min(100, user.loyaltyProgress ?? 0))}%` }}
+            />
+          </div>
+          {user.amlFlagged && user.amlFlagReason && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
+              <p className="text-sm text-red-700">{user.amlFlagReason}</p>
+            </div>
+          )}
         </div>
 
         {/* ── Section 3: Accounts ── */}
@@ -611,6 +664,15 @@ export function UserProfileClient({ user: initialUser }: Props) {
           onSuccess={refresh}
           userId={user.id}
           userName={`${user.firstName} ${user.lastName}`}
+        />
+      )}
+
+      {modal === "loyalty" && (
+        <LoyaltyTierModal
+          open
+          onClose={() => setModal(null)}
+          onSuccess={refresh}
+          user={user}
         />
       )}
 

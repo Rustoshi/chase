@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowUpDown, Loader2, X, AlertTriangle,
   Check, Shield, Lock, TrendingUp, TrendingDown,
-  RefreshCcw, ChevronDown, Delete,
+  RefreshCcw, ChevronDown, Delete, ShieldAlert, ArrowLeft,
 } from "lucide-react"
 import { UserHeader } from "@/components/user/UserHeader"
 import { BANK_NAME } from "@/lib/brand"
@@ -47,6 +47,8 @@ export default function SwapPage() {
   const [pin, setPin]               = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState("")
+  // Compliance (money-laundering) flag — blocks swaps up-front.
+  const [amlBlock, setAmlBlock]     = useState<{ flagged: boolean; reason: string }>({ flagged: false, reason: "" })
 
   // Success
   const [result, setResult] = useState<{
@@ -66,6 +68,13 @@ export default function SwapPage() {
         if (res.ok) {
           const data = await res.json()
           setAccounts(data.accounts || [])
+        }
+      } catch { /* */ }
+      try {
+        const pr = await fetch("/api/user/profile")
+        if (pr.ok) {
+          const p = await pr.json()
+          if (p.amlFlagged) setAmlBlock({ flagged: true, reason: p.amlFlagReason || "" })
         }
       } catch { /* */ }
       setLoading(false)
@@ -369,6 +378,60 @@ export default function SwapPage() {
   const outputValue  = direction === "buy"
     ? (btcOutput > 0 ? btcOutput.toFixed(8) : "0.00000000")
     : (fiatOutput > 0 ? fiatOutput.toFixed(2) : "0.00")
+
+  // ── Compliance block ──────────────────────────────────────────────────────
+  // A money-laundering flag stops swaps entirely, up-front.
+  if (amlBlock.flagged) {
+    return (
+      <>
+        <UserHeader title="Swap" showBack />
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px 120px" }}>
+          <div style={{
+            display: "flex", gap: 12, alignItems: "flex-start",
+            background: colors.redBg, border: `1px solid ${colors.red}33`,
+            borderRadius: 16, padding: "16px 18px",
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              background: colors.red, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <ShieldAlert style={{ width: 20, height: 20, color: "#fff" }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: colors.red, margin: "2px 0 6px" }}>
+                Account flagged for money laundering
+              </p>
+              <p style={{ fontSize: 13.5, lineHeight: 1.6, color: colors.textSecondary, margin: 0 }}>
+                {amlBlock.reason?.trim() ||
+                  "Your account is under compliance review. Transactions are temporarily unavailable. Please contact support."}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => router.push("/app/support")}
+            style={{
+              width: "100%", height: 48, marginTop: 16, borderRadius: 14, border: "none", cursor: "pointer",
+              background: colors.blue, color: "#fff", fontSize: 15, fontWeight: 600,
+            }}
+          >
+            Contact support
+          </button>
+          <button
+            onClick={() => router.push("/app/dashboard")}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              width: "100%", height: 44, marginTop: 10, borderRadius: 14, cursor: "pointer",
+              background: "transparent", border: `1px solid ${colors.border}`,
+              color: colors.textSecondary, fontSize: 14, fontWeight: 600,
+            }}
+          >
+            <ArrowLeft style={{ width: 16, height: 16 }} /> Back to dashboard
+          </button>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>

@@ -13,7 +13,7 @@ export async function GET() {
 
     await connectDB()
     const user = await User.findById(session.user.id)
-      .select("preferredCurrency kycStatus kycTier firstName lastName email avatarUrl createdAt")
+      .select("preferredCurrency kycStatus kycTier firstName lastName email avatarUrl createdAt loyaltyTier loyaltyProgress amlFlagged amlFlagReason")
       .lean()
 
     if (!user) {
@@ -29,6 +29,10 @@ export async function GET() {
       email:             user.email,
       avatarUrl:         user.avatarUrl || null,
       createdAt:         user.createdAt ? new Date(user.createdAt).toISOString() : null,
+      loyaltyTier:       user.loyaltyTier ?? 1,
+      loyaltyProgress:   user.loyaltyProgress ?? 0,
+      amlFlagged:        Boolean(user.amlFlagged),
+      amlFlagReason:     user.amlFlagReason || null,
     })
   } catch (err) {
     console.error("[User Profile API]", err)

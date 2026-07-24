@@ -80,6 +80,26 @@ export async function assertTransactionsAllowed(userId: string): Promise<void> {
   }
 }
 
+/**
+ * Throws when the client's account is flagged for money laundering.
+ * Enforced server-side on every money-movement route (transfers, swaps) so the
+ * block holds even if the UI is bypassed.
+ */
+export async function assertNotAmlFlagged(userId: string): Promise<void> {
+  if (!mongoose.Types.ObjectId.isValid(userId)) return
+  await connectDB()
+
+  const user = await User.findById(userId).select("amlFlagged amlFlagReason").lean() as
+    { amlFlagged?: boolean; amlFlagReason?: string } | null
+
+  if (user?.amlFlagged) {
+    throw new Error(
+      user.amlFlagReason?.trim() ||
+      "Your account is under compliance review. Transactions are temporarily unavailable. Please contact support."
+    )
+  }
+}
+
 // ── Writes ────────────────────────────────────────────────────────────────────
 
 /** Create or replace the client's alert. Editing resets the acknowledgement. */

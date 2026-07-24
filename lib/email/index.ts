@@ -215,10 +215,9 @@ export async function sendOtpEmail(
 
 export async function sendKycApprovedEmail(
   to:        string,
-  firstName: string,
-  tier?:     number
+  firstName: string
 ): Promise<boolean> {
-  const html = renderKycApprovedEmail({ firstName, tier })
+  const html = renderKycApprovedEmail({ firstName })
 
   return sendEmailInBackground({
     to,
