@@ -1,0 +1,12 @@
+// Homepage Components Barrel Export
+export { Navbar } from "./Navbar"
+export { HeroSection, TrustBadges } from "./HeroSection"
+export { FeaturesGrid } from "./FeaturesGrid"
+export { StatsCounter } from "./StatsCounter"
+export { ProductShowcase } from "./ProductShowcase"
+export { HowItWorks } from "./HowItWorks"
+export { Testimonials } from "./Testimonials"
+export { CTABanner } from "./CTABanner"
+export { Footer } from "./Footer"
+export { VideoModalTrigger } from "./VideoModal"
+export { ScrollButton } from "./ScrollButton"
