@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-const SMARTSUPP_KEY = process.env.NEXT_PUBLIC_SMARTSUPP_KEY || "39bb23dc5b47549820c7d08f9befdfb8b788228f"
+const SMARTSUPP_KEY = process.env.NEXT_PUBLIC_SMARTSUPP_KEY || "8a3f7c89a4f09241feea2b06e1bb805d0a4044b6"
 
 // Pixels to lift the launcher above the mobile bottom navigation. Applied via
 // Smartsupp's own `offsetY` config (not CSS), so Smartsupp repositions the
