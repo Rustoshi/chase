@@ -703,10 +703,13 @@ export async function updateTransactionStatus(
   const field  = isBTC ? "btcBalance" : "balance"
   const meta   = (tx.metadata ?? {}) as Record<string, unknown>
 
-  const needsBalanceAdjust =
-    status === "completed" &&
-    (tx.type === "transfer_out" || tx.type === "withdrawal") &&
-    !meta.balanceAdjusted
+  // Outgoing transfers and withdrawals debit the account at creation time — the
+  // money leaves immediately and the transaction then sits pending. Therefore:
+  //   • failing one must RETURN the money to the account (e.g. a rejected wire),
+  //   • completing one needs NO balance change (the funds already left).
+  // The refund is guarded by a flag so repeating the update can't double-credit.
+  const isDebitType = tx.type === "transfer_out" || tx.type === "withdrawal"
+  const needsRefund = status === "failed" && isDebitType && !meta.failRefunded
 
   const session = await mongoose.startSession()
   let updated: Record<string, unknown> | null = null
@@ -714,14 +717,10 @@ export async function updateTransactionStatus(
   try {
     session.startTransaction()
 
-    if (needsBalanceAdjust) {
-      const currentBal = isBTC ? Number(acct.btcBalance ?? 0) : Number(acct.balance ?? 0)
-      if (currentBal < tx.amount) {
-        throw new Error("Insufficient balance for this status transition")
-      }
+    if (needsRefund) {
       await Account.findByIdAndUpdate(
         tx.accountId,
-        { $inc: { [field]: -tx.amount } },
+        { $inc: { [field]: tx.amount } },
         { session }
       )
     }
@@ -733,7 +732,7 @@ export async function updateTransactionStatus(
         processedAt: status === "completed" ? new Date() : undefined,
         $set: {
           "metadata.adminStatusUpdate": { adminId, adminNote, timestamp: new Date().toISOString() },
-          ...(needsBalanceAdjust ? { "metadata.balanceAdjusted": true } : {}),
+          ...(needsRefund ? { "metadata.failRefunded": true } : {}),
         },
       },
       { new: true, session }
@@ -751,11 +750,15 @@ export async function updateTransactionStatus(
   await createAuditLog(adminId, adminEmail, "transaction.status_update", "Transaction",
     transactionId, { transactionId, fromStatus: tx.status, toStatus: status, adminNote }, req)
 
+  const refundNote = needsRefund
+    ? ` The ${(tx.amount / (isBTC ? 1e8 : 100)).toFixed(isBTC ? 8 : 2)} ${String(tx.currency)} has been returned to your account.`
+    : ""
+
   await notifyUser(
     String(tx.userId),
     "transaction",
     `Transaction ${status}`,
-    `Your transaction ${tx.reference} has been updated to ${status}.${adminNote ? ` Note: ${adminNote}` : ""}`,
+    `Your transaction ${tx.reference} has been updated to ${status}.${refundNote}${adminNote ? ` Note: ${adminNote}` : ""}`,
     { transactionId }
   )
 

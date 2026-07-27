@@ -123,9 +123,11 @@ export function EditUserModal({ open, onClose, onSuccess, user }: Props) {
       const initialBalances: Record<string, string> = {}
       user.accounts?.forEach((acc) => {
         if (acc.walletType === "bitcoin") {
+          // acc.btcBalance is already in whole BTC (service divides by 1e8).
           initialBalances[acc.id] = acc.btcBalance.toString()
         } else {
-          initialBalances[acc.id] = (acc.balance / 100).toFixed(2) // Convert cents to dollars
+          // acc.balance is already in major units / dollars (service divides by 100).
+          initialBalances[acc.id] = acc.balance.toFixed(2)
         }
       })
       setBalances(initialBalances)
@@ -186,6 +188,29 @@ export function EditUserModal({ open, onClose, onSuccess, user }: Props) {
       return
     }
 
+    // Also persist any direct balance edits made on the Balances tab, so the
+    // main "Save changes" button applies them too (not just the per-row "Set").
+    for (const acc of user.accounts ?? []) {
+      const raw = balances[acc.id]
+      if (raw === undefined || raw === "") continue
+      const num = parseFloat(raw)
+      if (isNaN(num) || num < 0) continue
+      const isBtc          = acc.walletType === "bitcoin"
+      const newBalance     = isBtc ? Math.round(num * 1e8) : Math.round(num * 100)
+      const currentSmallest = isBtc ? Math.round(acc.btcBalance * 1e8) : Math.round(acc.balance * 100)
+      if (newBalance === currentSmallest) continue // unchanged
+      const balRes = await fetch(`/api/admin/users/${user.id}/set-balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: acc.id, newBalance }),
+      })
+      if (!balRes.ok) {
+        const data = await balRes.json().catch(() => ({}))
+        toast({ title: "Balance not saved", description: data.error ?? "Failed to update a balance", variant: "destructive" })
+        return
+      }
+    }
+
     toast({ title: "User updated", variant: "success" })
     onSuccess()
     onClose()
@@ -215,8 +240,8 @@ export function EditUserModal({ open, onClose, onSuccess, user }: Props) {
       return
     }
 
-    // Convert to cents/satoshis for storage
-    const newBalance = isBitcoin ? numValue : Math.round(numValue * 100)
+    // Convert to the smallest unit for storage: satoshis for BTC, cents for fiat.
+    const newBalance = isBitcoin ? Math.round(numValue * 1e8) : Math.round(numValue * 100)
 
     setSavingBalances(true)
     try {
@@ -578,7 +603,7 @@ export function EditUserModal({ open, onClose, onSuccess, user }: Props) {
                           </div>
 
                           <p style={{ fontSize: 12, color: DASH.textMuted, margin: "8px 0 0" }}>
-                            Current: {currencySymbol}{isBitcoin ? account.btcBalance.toFixed(8) : (account.balance / 100).toFixed(2)}
+                            Current: {currencySymbol}{isBitcoin ? account.btcBalance.toFixed(8) : account.balance.toFixed(2)}
                           </p>
                         </div>
                       )
